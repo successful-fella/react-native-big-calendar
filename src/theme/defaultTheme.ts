@@ -4,7 +4,7 @@ export const defaultTheme: ThemeInterface = {
   isRTL: false,
   palette: {
     primary: {
-      main: 'rgb(66, 133, 244)',
+      main: '#79429c',
       contrastText: '#fff',
     },
     nowIndicator: 'red',
