@@ -1,8 +1,10 @@
+import calendarize, { Week } from 'calendarize'
 import dayjs from 'dayjs'
 import React from 'react'
+import { TextStyle, ViewStyle } from 'react-native'
 
 import { OVERLAP_PADDING } from './commonStyles'
-import { ICalendarEvent, Mode, WeekNum } from './interfaces'
+import { ICalendarEventBase, Mode, WeekNum } from './interfaces'
 import { Palette } from './theme/ThemeInterface'
 
 export const typedMemo: <T>(c: T) => T = React.memo
@@ -125,8 +127,8 @@ export function isAllDayEvent(start: Date, end: Date) {
 }
 
 export function getCountOfEventsAtEvent(
-  event: ICalendarEvent<any>,
-  eventList: ICalendarEvent<any>[],
+  event: ICalendarEventBase,
+  eventList: ICalendarEventBase[],
 ) {
   return eventList.filter(
     (e) =>
@@ -135,7 +137,7 @@ export function getCountOfEventsAtEvent(
   ).length
 }
 
-export function getOrderOfEvent(event: ICalendarEvent<any>, eventList: ICalendarEvent<any>[]) {
+export function getOrderOfEvent(event: ICalendarEventBase, eventList: ICalendarEventBase[]) {
   const events = eventList
     .filter(
       (e) =>
@@ -213,4 +215,70 @@ function weekDaysCount(weekStartsOn: WeekNum, weekEndsOn: WeekNum) {
   }
   // default
   return 1
+}
+
+export function getEventSpanningInfo(
+  event: ICalendarEventBase,
+  date: dayjs.Dayjs,
+  dayOfTheWeek: number,
+  calendarWidth: number,
+  showAdjacentMonths: boolean,
+) {
+  const dayWidth = calendarWidth / 7
+
+  // adding + 1 because durations start at 0
+  const eventDuration =
+    Math.floor(dayjs.duration(dayjs(event.end).diff(dayjs(event.start))).asDays()) + 1
+  const eventDaysLeft = Math.floor(dayjs.duration(dayjs(event.end).diff(date)).asDays()) + 1
+  const weekDaysLeft = 7 - dayOfTheWeek
+  const monthDaysLeft = date.endOf('month').date() - date.date()
+  // console.log(dayOfTheWeek === 0 && !showAdjacentMonths && monthDaysLeft < 7)
+  const isMultipleDays = eventDuration > 1
+  // This is to determine how many days from the event to show during a week
+  const eventWeekDuration =
+    !showAdjacentMonths && monthDaysLeft < 7 && monthDaysLeft < eventDuration
+      ? monthDaysLeft + 1
+      : eventDuration > weekDaysLeft
+      ? weekDaysLeft
+      : eventDaysLeft < eventDuration
+      ? eventDaysLeft
+      : eventDuration
+  const isMultipleDaysStart =
+    isMultipleDays &&
+    (date.isSame(event.start, 'day') ||
+      (dayOfTheWeek === 0 && date.isAfter(event.start)) ||
+      (!showAdjacentMonths && date.get('date') === 1))
+  // - 6 to take in account the padding
+  const eventWidth = dayWidth * eventWeekDuration - 6
+
+  return { eventWidth, isMultipleDays, isMultipleDaysStart, eventWeekDuration }
+}
+
+export function objHasContent(obj: ViewStyle | TextStyle): boolean {
+  return !!Object.keys(obj).length
+}
+
+export function stringHasContent(string: string): boolean {
+  return !!string.length
+}
+
+export function getWeeksWithAdjacentMonths(targetDate: dayjs.Dayjs, weekStartsOn: WeekNum) {
+  let weeks = calendarize(targetDate.toDate(), weekStartsOn)
+  const firstDayIndex = weeks[0].findIndex((d) => d === 1)
+  const lastDay = targetDate.endOf('month').date()
+  const lastDayIndex = weeks[weeks.length - 1].findIndex((d) => d === lastDay)
+
+  weeks = weeks.map((week, iw) => {
+    return week.map((d, id) => {
+      if (d !== 0) {
+        return d
+      } else if (iw === 0) {
+        return d - (firstDayIndex - id - 1)
+      } else {
+        return lastDay + (id - lastDayIndex)
+      }
+    }) as Week
+  })
+
+  return weeks
 }

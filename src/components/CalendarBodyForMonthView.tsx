@@ -7,55 +7,86 @@ import { u } from '../commonStyles'
 import { useNow } from '../hooks/useNow'
 import { usePanResponder } from '../hooks/usePanResponder'
 import {
+  CalendarCellStyle,
+  CalendarCellTextStyle,
   EventCellStyle,
   EventRenderer,
   HorizontalDirection,
-  ICalendarEvent,
+  ICalendarEventBase,
   WeekNum,
 } from '../interfaces'
 import { useTheme } from '../theme/ThemeContext'
 import { typedMemo } from '../utils'
 import { CalendarEventForMonthView } from './CalendarEventForMonthView'
+import { getWeeksWithAdjacentMonths } from '..'
 
-interface CalendarBodyForMonthViewProps<T> {
+interface CalendarBodyForMonthViewProps<T extends ICalendarEventBase> {
   containerHeight: number
   targetDate: dayjs.Dayjs
-  events: ICalendarEvent<T>[]
+  events: T[]
   style: ViewStyle
   eventCellStyle?: EventCellStyle<T>
+  calendarCellStyle?: CalendarCellStyle
+  calendarCellTextStyle?: CalendarCellTextStyle
   hideNowIndicator?: boolean
+  showAdjacentMonths: boolean
   onPressCell?: (date: Date) => void
-  onPressEvent?: (event: ICalendarEvent<T>) => void
+  onPressDateHeader?: (date: Date) => void
+  onPressEvent?: (event: T) => void
   onSwipeHorizontal?: (d: HorizontalDirection) => void
   renderEvent?: EventRenderer<T>
   maxVisibleEventCount: number
   weekStartsOn: WeekNum
+  eventMinHeightForMonthView: number
+  moreLabel: string
 }
 
-function _CalendarBodyForMonthView<T>({
+function _CalendarBodyForMonthView<T extends ICalendarEventBase>({
   containerHeight,
   targetDate,
   style,
   onPressCell,
+  onPressDateHeader,
   events,
   onPressEvent,
   eventCellStyle,
+  calendarCellStyle,
+  calendarCellTextStyle,
   onSwipeHorizontal,
   hideNowIndicator,
+  showAdjacentMonths,
   renderEvent,
   maxVisibleEventCount,
   weekStartsOn,
+  eventMinHeightForMonthView,
+  moreLabel,
 }: CalendarBodyForMonthViewProps<T>) {
   const { now } = useNow(!hideNowIndicator)
+  const [calendarWidth, setCalendarWidth] = React.useState<number>(0)
 
   const panResponder = usePanResponder({
     onSwipeHorizontal,
   })
 
-  const weeks = calendarize(targetDate.toDate(), weekStartsOn)
+  const weeks = showAdjacentMonths
+    ? getWeeksWithAdjacentMonths(targetDate, weekStartsOn)
+    : calendarize(targetDate.toDate(), weekStartsOn)
 
   const minCellHeight = containerHeight / 5 - 30
   const theme = useTheme()
+
+  const getCalendarCellStyle = React.useMemo(
+    () => (typeof calendarCellStyle === 'function' ? calendarCellStyle : () => calendarCellStyle),
+    [calendarCellStyle],
+  )
+
+  const getCalendarCellTextStyle = React.useMemo(
+    () =>
+      typeof calendarCellTextStyle === 'function'
+        ? calendarCellTextStyle
+        : () => calendarCellTextStyle,
+    [calendarCellTextStyle],
+  )
 
   return (
     <View
@@ -72,6 +103,7 @@ function _CalendarBodyForMonthView<T>({
         { borderColor: theme.palette.gray['200'] },
         style,
       ]}
+      onLayout={({ nativeEvent: { layout } }) => setCalendarWidth(layout.width)}
       {...panResponder.panHandlers}
     >
       {weeks.map((week, i) => (
@@ -87,7 +119,9 @@ function _CalendarBodyForMonthView<T>({
           ]}
         >
           {week
-            .map((d) => (d > 0 ? targetDate.date(d) : null))
+            .map((d) =>
+              showAdjacentMonths ? targetDate.date(d) : d > 0 ? targetDate.date(d) : null,
+            )
             .map((date, ii) => (
               <TouchableOpacity
                 onPress={() => date && onPressCell && onPressCell(date.toDate())}
@@ -102,27 +136,57 @@ function _CalendarBodyForMonthView<T>({
                   {
                     minHeight: minCellHeight,
                   },
+                  {
+                    ...getCalendarCellStyle(date?.toDate(), i),
+                  },
                 ]}
                 key={ii}
               >
-                <Text
-                  style={[
-                    { textAlign: 'center' },
-                    theme.typography.sm,
-                    {
-                      color:
-                        date?.format('YYYY-MM-DD') === now.format('YYYY-MM-DD')
-                          ? theme.palette.primary.main
-                          : theme.palette.gray['800'],
-                    },
-                  ]}
+                <TouchableOpacity
+                  onPress={() =>
+                    date &&
+                    (onPressDateHeader
+                      ? onPressDateHeader(date.toDate())
+                      : onPressCell && onPressCell(date.toDate()))
+                  }
                 >
-                  {date && date.format('D')}
-                </Text>
+                  <Text
+                    style={[
+                      { textAlign: 'center' },
+                      theme.typography.sm,
+                      {
+                        color:
+                          date?.format('YYYY-MM-DD') === now.format('YYYY-MM-DD')
+                            ? theme.palette.primary.main
+                            : date?.month() !== targetDate.month()
+                            ? theme.palette.gray['500']
+                            : theme.palette.gray['800'],
+                      },
+                      {
+                        ...getCalendarCellTextStyle(date?.toDate(), i),
+                      },
+                    ]}
+                  >
+                    {date && date.format('D')}
+                  </Text>
+                </TouchableOpacity>
                 {date &&
                   events
-                    .filter(({ start }) =>
-                      dayjs(start).isBetween(date.startOf('day'), date.endOf('day'), null, '[)'),
+                    .sort((a, b) => {
+                      if (dayjs(a.start).isSame(b.start, 'day')) {
+                        const aDuration = dayjs.duration(dayjs(a.end).diff(dayjs(a.start))).days()
+                        const bDuration = dayjs.duration(dayjs(b.end).diff(dayjs(b.start))).days()
+                        return bDuration - aDuration
+                      }
+                      return a.start.getTime() - b.start.getTime()
+                    })
+                    .filter(({ start, end }) =>
+                      date.isBetween(
+                        dayjs(start).startOf('day'),
+                        dayjs(end).endOf('day'),
+                        null,
+                        '[)',
+                      ),
                     )
                     .reduce(
                       (elements, event, index, events) => [
@@ -130,9 +194,15 @@ function _CalendarBodyForMonthView<T>({
                         index > maxVisibleEventCount ? null : index === maxVisibleEventCount ? (
                           <Text
                             key={index}
-                            style={{ fontSize: 11, marginTop: 2, fontWeight: 'bold' }}
+                            style={[
+                              theme.typography.moreLabel,
+                              { marginTop: 2, color: theme.palette.moreLabel },
+                            ]}
                           >
-                            {events.length - maxVisibleEventCount} More
+                            {moreLabel.replace(
+                              '{moreCount}',
+                              `${events.length - maxVisibleEventCount}`,
+                            )}
                           </Text>
                         ) : (
                           <CalendarEventForMonthView
@@ -141,6 +211,12 @@ function _CalendarBodyForMonthView<T>({
                             eventCellStyle={eventCellStyle}
                             onPressEvent={onPressEvent}
                             renderEvent={renderEvent}
+                            date={date}
+                            dayOfTheWeek={ii}
+                            calendarWidth={calendarWidth}
+                            isRTL={theme.isRTL}
+                            eventMinHeightForMonthView={eventMinHeightForMonthView}
+                            showAdjacentMonths={showAdjacentMonths}
                           />
                         ),
                       ],

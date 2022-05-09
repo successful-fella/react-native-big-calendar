@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 import React from 'react'
 import { RecursiveArray, Text, TouchableOpacity, View, ViewStyle } from 'react-native'
 
-import { EventRenderer, ICalendarEvent } from '../src/interfaces'
+import { EventRenderer, ICalendarEventBase } from '../src/interfaces'
 import { formatStartEnd } from '../src/utils'
 
 const eventNotes = (
@@ -12,7 +12,7 @@ const eventNotes = (
   </View>
 )
 
-export const events: ICalendarEvent<{ color?: string }>[] = [
+export const events: Array<ICalendarEventBase & { color?: string }> = [
   {
     title: 'Watch Boxing',
     start: dayjs().set('hour', 0).set('minute', 0).set('second', 0).toDate(),
@@ -57,7 +57,40 @@ export const events: ICalendarEvent<{ color?: string }>[] = [
   },
 ]
 
-export interface MyCustomEventType {
+export const spanningEvents: Array<ICalendarEventBase & { color?: string }> = [
+  {
+    title: 'Watch Boxing',
+    start: dayjs().subtract(1, 'week').set('hour', 14).set('minute', 30).toDate(),
+    end: dayjs().subtract(1, 'week').set('hour', 15).set('minute', 30).toDate(),
+  },
+  {
+    title: 'Laundry',
+    start: dayjs().subtract(1, 'week').set('hour', 1).set('minute', 30).toDate(),
+    end: dayjs().subtract(1, 'week').set('hour', 2).set('minute', 30).toDate(),
+  },
+  {
+    title: 'Meeting',
+    start: dayjs().subtract(1, 'week').set('hour', 10).set('minute', 0).toDate(),
+    end: dayjs().add(1, 'week').set('hour', 10).set('minute', 30).toDate(),
+  },
+  {
+    title: 'Coffee break',
+    start: dayjs().set('hour', 14).set('minute', 30).toDate(),
+    end: dayjs().add(1, 'week').set('hour', 15).set('minute', 30).toDate(),
+  },
+  {
+    title: 'Repair my car',
+    start: dayjs().add(1, 'day').set('hour', 7).set('minute', 45).toDate(),
+    end: dayjs().add(4, 'day').set('hour', 13).set('minute', 30).toDate(),
+  },
+  {
+    title: 'Vacation',
+    start: dayjs().subtract(1, 'month').set('hour', 7).set('minute', 45).toDate(),
+    end: dayjs().add(1, 'month').set('hour', 13).set('minute', 30).toDate(),
+  },
+]
+
+export interface MyCustomEventType extends ICalendarEventBase {
   color?: string
 }
 
